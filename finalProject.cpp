@@ -1,7 +1,8 @@
 // make skybox [!!!]
 // make snow
 // make animated skeleton
-// make geometric shapes (trees?)
+// make geometric shapes (presents?)
+// mesh wireframes (trees)
 // make a fire (?)
 
 #include <glad/gl.h>
@@ -188,7 +189,31 @@ struct Skybox {
     }
 };
 
-struct Tree {
+static GLuint LoadTextureTileBox(const char *texture_file_path) {
+    int w, h, channels;
+    uint8_t* img = stbi_load(texture_file_path, &w, &h, &channels, 3);
+    GLuint texture;
+    glGenTextures(1, &texture);  
+    glBindTexture(GL_TEXTURE_2D, texture);  
+
+    // To tile textures on a box, we set wrapping to repeat
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    if (img) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cout << "Failed to load texture " << texture_file_path << std::endl;
+    }
+    stbi_image_free(img);
+
+    return texture;
+}
+
+struct Present {
 	glm::vec3 position;		// Position of the box 
 	glm::vec3 scale;		// Size of the box in each axis
 	
@@ -314,13 +339,13 @@ struct Tree {
 		1.0f, 0.0f,
 		0.0f, 0.0f,
 
-		// Top - we do not want texture the top
-		0.0f, 0.0f,
-		0.0f, 0.0f,
-		0.0f, 0.0f,
+		// Top 
+		0.0f, 1.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f,
 		0.0f, 0.0f,
 
-		// Bottom - we do not want texture the bottom
+		// Bottom - we don't need to texture the bottom
 		0.0f, 0.0f,
 		0.0f, 0.0f,
 		0.0f, 0.0f,
@@ -342,7 +367,7 @@ struct Tree {
  
 
 	void initialize(glm::vec3 position, glm::vec3 scale) {
-		// Define scale of the tree geometry
+		// Define scale of the present geometry
 		this->position = position;
 		this->scale = scale;
 
@@ -361,7 +386,7 @@ struct Tree {
 		glBufferData(GL_ARRAY_BUFFER, sizeof(color_buffer_data), color_buffer_data, GL_STATIC_DRAW);
 
 		// Scale UV coordinates such that texture will repeat
-		for (int i = 0; i < 24; ++i) uv_buffer_data[2*i+1] *= 5;
+		//for (int i = 0; i < 24; ++i) uv_buffer_data[2*i+1] *= 5;
 
 		// Create a vertex buffer object to store the UV data
 		glGenBuffers(1, &uvBufferID);
@@ -384,10 +409,10 @@ struct Tree {
 		mvpMatrixID = glGetUniformLocation(programID, "MVP");
 
         // Load a texture 
-        //textureID = LoadTextureTileBox("../lab2/facade4.jpg");
+        textureID = LoadTextureTileBox("../finalProject/present.png");
 
         // Get a handle to texture sampler 
-        //textureSamplerID = glGetUniformLocation(programID, "textureSampler");
+        textureSamplerID = glGetUniformLocation(programID, "textureSampler");
 	}
 
 	void render(glm::mat4 cameraMatrix) {
@@ -407,9 +432,9 @@ struct Tree {
 		// TODO: Model transform 
 		// -----------------------
 		glm::mat4 modelMatrix = glm::mat4();    
-		// Move the tree to its world position first
+		// Move the present to its world position first
 		modelMatrix = glm::translate(modelMatrix, position);
-        // Scale the box along each axis to make it look like a tree
+        // Scale the box along each axis to make it look like a present
         modelMatrix = glm::scale(modelMatrix, scale);
         // -----------------------
 
@@ -471,12 +496,10 @@ int main() {
     Skybox sky;
     sky.initialize();
 
-    Tree tree1, tree2, tree3, tree4;
-	tree1.initialize(glm::vec3(30, 20, -50), glm::vec3(8, 40, 8));
-    tree2.initialize(glm::vec3(-30, 10, 50), glm::vec3(4, 20, 4));
-    tree3.initialize(glm::vec3(-20, 10, 80), glm::vec3(4, 20, 4));
-    tree4.initialize(glm::vec3(5, 5, 40), glm::vec3(2, 10, 2));
-
+    Present present1, present2, present3;
+	present1.initialize(glm::vec3(30, 0, -20), glm::vec3(5, 5, 5));
+    present2.initialize(glm::vec3(12, 0, 2), glm::vec3(1, 1, 1));
+    present3.initialize(glm::vec3(20, 0, 0), glm::vec3(2, 2, 2));
 
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), 4.0f/3.0f, 0.1f, 1000.0f);
 
@@ -492,19 +515,17 @@ int main() {
         glm::mat4 vp = projectionMatrix * viewMatrix;
 
         sky.render(vp);
-        tree1.render(vp);
-        tree2.render(vp);
-        tree3.render(vp);
-        tree4.render(vp);
+        present1.render(vp);
+        present2.render(vp);
+        present3.render(vp);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    tree1.cleanup();
-    tree2.cleanup();
-    tree3.cleanup();
-    tree4.cleanup();
+    present1.cleanup();
+    present2.cleanup();
+    present3.cleanup();
     sky.cleanup();
     glfwTerminate();
     return 0;

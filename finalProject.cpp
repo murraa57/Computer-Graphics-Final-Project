@@ -4,7 +4,7 @@
 // make lighting
 // make geometric shapes (presents?) [!!!]
 // mesh wireframes (trees) [!??]
-// make a fire (?)
+// calculate FPS [!!!]
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -949,6 +949,9 @@ int main() {
 
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), 4.0f/3.0f, 0.1f, 1000.0f);
 
+	float fTime = 0.0f;			// Time for measuring fps
+	unsigned long frames = 0;
+
     while (!glfwWindowShouldClose(window)) {
         float currentTime = glfwGetTime();
         float deltaTime = currentTime - lastTime;
@@ -977,6 +980,19 @@ int main() {
         snow.update(deltaTime);
         snow.render(vp);
 
+		// FPS tracking 
+		// Count number of frames over a few seconds and take average
+		frames++;
+		fTime += deltaTime;
+		if (fTime > 2.0f) {		
+			float fps = frames / fTime;
+			frames = 0;
+			fTime = 0;
+			
+			std::stringstream stream;
+			stream << std::fixed << std::setprecision(2) << "Final Project | Frames per second (FPS): " << fps;
+			glfwSetWindowTitle(window, stream.str().c_str());
+		}
 
         glfwSwapBuffers(window);
         glfwPollEvents();

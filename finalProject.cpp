@@ -1,10 +1,10 @@
 // make skybox [!!!]
-// make snow
+// make snow [!!!]
 // make animated skeleton
-// make geometric shapes (presents?)
-// mesh wireframes (trees)
+// make lighting
+// make geometric shapes (presents?) [!!!]
+// mesh wireframes (trees) [!??]
 // make a fire (?)
-
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -40,9 +40,9 @@ static float viewAzimuth = 0.f;
 static float viewPolar = 0.f;
 static float viewDistance = 1.0f;
 
-// Lighting  
-//static glm::vec3 lightIntensity(5e6f, 5e6f, 5e6f);
-//static glm::vec3 lightPosition(-275.0f, 500.0f, 800.0f);
+// Point light 
+static glm::vec3 lightPosition(-0.0f, 400.0f, -250.0f);
+static glm::vec3 lightIntensity(200.0f, 200.0f, 200.0f);
 
 
 static GLuint LoadSkyboxTexture(const char *texture_file_path) {
@@ -379,6 +379,8 @@ struct Present {
 	GLuint mvpMatrixID;
 	GLuint textureSamplerID;
 	GLuint programID;
+    GLuint lightPositionID;
+    GLuint lightIntensityID;
  
 
 	void initialize(glm::vec3 position, glm::vec3 scale) {
@@ -428,6 +430,10 @@ struct Present {
 
         // Get a handle to texture sampler 
         textureSamplerID = glGetUniformLocation(programID, "textureSampler");
+
+        // Lighting IDs
+        lightPositionID = glGetUniformLocation(programID, "lightPosition");
+        lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
 	}
 
 	void render(glm::mat4 cameraMatrix) {
@@ -467,6 +473,9 @@ struct Present {
 		glBindTexture(GL_TEXTURE_2D, textureID);
 		glUniform1i(textureSamplerID, 0);
 
+        glUniform3fv(lightPositionID, 1, &lightPosition[0]);
+        glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
+
 		// Draw the box
 		glDrawElements(
 			GL_TRIANGLES,      // mode
@@ -491,15 +500,13 @@ struct Present {
 	}
 }; 
 
-
-
 struct MyBot {
 	// Shader variable IDs
 	GLuint mvpMatrixID;
-	//GLuint lightPositionID;
-	//GLuint lightIntensityID;
 	GLuint programID;
     GLuint baseColorTexID;
+    GLuint lightPositionID;
+    GLuint lightIntensityID;
 
 	tinygltf::Model model;
 
@@ -593,7 +600,7 @@ struct MyBot {
 
 	void initialize() {
 		// Modify your path if needed
-		if (!loadModel(model, "../finalProject/scene.gltf")) {
+		if (!loadModel(model, "../finalProject/christmastree.gltf")) {
 			return;
 		}
 
@@ -610,8 +617,8 @@ struct MyBot {
 		// Get a handle for GLSL variables
 		mvpMatrixID = glGetUniformLocation(programID, "MVP");
         baseColorTexID = glGetUniformLocation(programID, "baseColorTex");
-		//lightPositionID = glGetUniformLocation(programID, "lightPosition");
-		//lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
+        lightPositionID = glGetUniformLocation(programID, "lightPosition");
+        lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
 	}
 
 	void bindMesh(std::vector<PrimitiveObject> &primitiveObjects,
@@ -782,8 +789,8 @@ struct MyBot {
 		glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
 
 		// Set light data 
-		//glUniform3fv(lightPositionID, 1, &lightPosition[0]);
-		//glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
+		glUniform3fv(lightPositionID, 1, &lightPosition[0]);
+        glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
 
 		// Draw the GLTF model
 		drawModel(primitiveObjects, model);
@@ -793,6 +800,118 @@ struct MyBot {
 		glDeleteProgram(programID);
 	}
 }; 
+
+struct Snow {
+    struct Particle {
+        glm::vec3 position;
+        float size;
+        float speed;
+    };
+
+    std::vector<Particle> particles;
+    int particleCount = 1000;
+
+    // OpenGL buffers
+    GLuint vertexArrayID;
+    GLuint positionBufferID;
+    GLuint sizeBufferID;
+    GLuint programID;
+    GLuint mvpMatrixID;
+
+    void initialize() {
+        // Initialize particles randomly in a cubic volume above the scene
+        particles.resize(particleCount);
+        for (auto &p : particles) {
+            p.position = glm::vec3(
+                (rand() % 200) - 100,  
+                (rand() % 50) + 50,   
+                (rand() % 200) - 100   
+            );
+            p.size = float((rand() % 10) + 10); 
+            p.speed = float((rand() % 5) + 10); 
+        }
+
+        // Create VAO
+        glGenVertexArrays(1, &vertexArrayID);
+        glBindVertexArray(vertexArrayID);
+
+        // Create position buffer
+        glGenBuffers(1, &positionBufferID);
+        glBindBuffer(GL_ARRAY_BUFFER, positionBufferID);
+        glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+
+        // Create size buffer
+        glGenBuffers(1, &sizeBufferID);
+        glBindBuffer(GL_ARRAY_BUFFER, sizeBufferID);
+        glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+
+        // Load shaders
+        programID = LoadShadersFromFile("../finalProject/snow.vert", "../finalProject/snow.frag");
+        mvpMatrixID = glGetUniformLocation(programID, "MVP");
+
+        glBindVertexArray(0);
+    }
+
+    void update(float deltaTime) {
+        // Update particle positions
+        for (auto &p : particles) {
+            p.position.y -= p.speed * deltaTime;
+
+            // Reset particle to top if it falls below y=0
+            if (p.position.y < 0.0f) {
+                p.position.y = float((rand() % 50) + 50);
+                p.position.x = float((rand() % 200) - 100);
+                p.position.z = float((rand() % 200) - 100);
+            }
+        }
+
+        std::vector<glm::vec3> positions(particleCount);
+        std::vector<float> sizes(particleCount);
+        for (int i = 0; i < particleCount; i++) {
+            positions[i] = particles[i].position;
+            sizes[i] = particles[i].size;
+        }
+
+        glBindBuffer(GL_ARRAY_BUFFER, positionBufferID);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, particleCount * sizeof(glm::vec3), positions.data());
+
+        glBindBuffer(GL_ARRAY_BUFFER, sizeBufferID);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, particleCount * sizeof(float), sizes.data());
+    }
+
+    void render(glm::mat4 vpMatrix) {
+        glUseProgram(programID);
+        glBindVertexArray(vertexArrayID);
+
+        // Position 
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, positionBufferID);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+        // Size 
+        glEnableVertexAttribArray(1);
+        glBindBuffer(GL_ARRAY_BUFFER, sizeBufferID);
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+        // MVP matrix
+        glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &vpMatrix[0][0]);
+
+        // Draw all particles in one call
+        glDrawArrays(GL_POINTS, 0, particleCount);
+
+        glDisableVertexAttribArray(0);
+        glDisableVertexAttribArray(1);
+        glBindVertexArray(0);
+    }
+
+    void cleanup() {
+        glDeleteBuffers(1, &positionBufferID);
+        glDeleteBuffers(1, &sizeBufferID);
+        glDeleteVertexArrays(1, &vertexArrayID);
+        glDeleteProgram(programID);
+    }
+};
+
 
 int main() {
     if (!glfwInit()) return -1;
@@ -811,6 +930,11 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL); // important for skybox depth
 
+    Snow snow;
+    snow.initialize();
+
+    float lastTime = glfwGetTime(); 
+
     Skybox sky;
     sky.initialize();
 
@@ -826,6 +950,10 @@ int main() {
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), 4.0f/3.0f, 0.1f, 1000.0f);
 
     while (!glfwWindowShouldClose(window)) {
+        float currentTime = glfwGetTime();
+        float deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::vec3 camDir(
@@ -846,11 +974,16 @@ int main() {
         modelMatrix = glm::scale(modelMatrix, glm::vec3(1.5f)); 
         bot.render(vp*modelMatrix);
 
+        snow.update(deltaTime);
+        snow.render(vp);
+
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // Clean up
+    snow.cleanup();
 	bot.cleanup();
     present1.cleanup();
     present2.cleanup();
